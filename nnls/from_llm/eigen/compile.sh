@@ -1,20 +1,43 @@
+#!/bin/bash
 
-# Assumes MKL has been loaded as a module
+# compile as stand-alone app
 
-g++ \
+
+COMMAND="g++-mp-13 \
 -O3 \
 -g \
 -D EIGEN_DONT_PARALLELIZE \
--I /home/mdewing/.local/lib/python3.10/site-packages/pybind11/include/ \
--I /usr/include/python3.10/ \
--I /home/mdewing/software/linalg/eigen/eigen/ \
+-I /Users/cjknight/Documents/soft/lib/eigen/include \
+-I /Users/cjknight/Documents/soft/lib/eigen/unsupported/include \
+-std=c++14 \
+from_chatgpt2.cpp  \
+-L /Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas  -lpthread -lm -ldl "
+
+echo "COMMAND= ${COMMAND}"
+${COMMAND}
+
+exit
+
+# compile as library with Python binding
+
+PYTHON_INC=`python3 -m pybind11 --includes`
+
+COMMAND="g++-mp-12 \
+-O3 \
+-g \
+-D EIGEN_DONT_PARALLELIZE \
+-I /Users/cjknight/Documents/soft/lib/eigen/include \
+-I /Users/cjknight/Documents/soft/lib/eigen/unsupported/include \
+-std=c++14 ${PYTHON_INC} \
 -shared \
 -fPIC \
 -o solver.so \
 pyeigen1.cpp \
 from_chatgpt2.cpp  \
--Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_sequential -lmkl_core  -lpthread -lm -ldl
+-L /Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas  -lpthread -lm -ldl "
 
+echo "COMMAND= ${COMMAND}"
+${COMMAND}
 
 #-L /usr/lib/python3.10/config-3.10-x86_64-linux-gnu/ \
 #-l python3.10
