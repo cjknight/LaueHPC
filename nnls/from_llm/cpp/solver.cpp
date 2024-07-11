@@ -33,7 +33,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
   const double zero = 1e-15;
   
-  int execute_swhile = 0;
+  int wwhile_count = 0;
   int swhile_count = 0;
   
 #if defined(_DEBUG)
@@ -151,9 +151,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 #ifdef _DEBUG
     printf("Starting R while-loop w/ wr.maxCoeff= %f\n",wr_max);
 #endif
-			    
+
+    wwhile_count++;
+    
     //     double max_dot_product = -std::numeric_limits<double>::infinity();
-    double max_dot_product = -1e10;
+    double max_dot_product = -std::numeric_limits<double>::infinity();
 
     int j_max = -1;
 
@@ -166,10 +168,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     //     }
 
     for(int j=0; j<num_R; ++j) {
-      double dot_product = w[j];
+      double dot_product = w[R[j]];
+      //      printf(" -- j, w, max_dot_product, j_max= %i %f %f %i\n",R[j],w[R[j]],max_dot_product,j_max);
       if(dot_product > max_dot_product) {
 	max_dot_product = dot_product;
-	j_max = j;
+	j_max = R[j];
       }
     }
 
@@ -259,7 +262,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
 #ifdef _DEBUG
     printf(" -- APP(%i)= ",num_P*num_P);
-    for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
+    //    for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
     printf("\n");
 #endif
     
@@ -273,7 +276,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
 #ifdef _DEBUG
     printf(" -- APy(%i)= ",num_P);
-    for(int i=0; i<num_P; ++i) printf(" %f",APy[i]);
+    //    for(int i=0; i<num_P; ++i) printf(" %f",APy[i]);
     printf("\n");
     
     //    printf("calling initial dgels_() w/ lwork= %i\n",lwork);
@@ -308,7 +311,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       printf(" -- Starting while() loop w/ min_sP= %f\n",min_sP);
 #endif
 
-      execute_swhile = 1;
+      swhile_count++;
       
       double alpha = std::numeric_limits<double>::infinity();  // Initialize alpha as positive infinity
 
@@ -473,12 +476,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       printf(" -- Finished while() loop w/ min_sP= %f\n",min_sP);
 #endif
     } // while(min_sP)
-
-    if(execute_swhile) {
-      execute_swhile = 0;
-      swhile_count++;
-    }
-    //    if(swhile_count == 3) exit(1);
     
     //     x = s;  // Update the solution vector x with the non-negative least squares solution
 
@@ -520,7 +517,8 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     //         ++idx;
     //     }
 
-    for(int i=0; i<num_R; ++i) wr[ R[i] ] = w[i];
+    //    for(int i=0; i<num_R; ++i) wr[ R[i] ] = w[i];
+    for(int i=0; i<num_R; ++i) wr[i] = w[R[i]];
     
     wr_max = w[ R[0] ];
     for(int i=1; i<num_R; ++i) if(wr_max < w[ R[i] ]) wr_max = w[ R[i] ];
@@ -540,13 +538,13 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
     {	
       printf(" -- Ax(%i)= ", num_rows);
-      for(int i=0; i<num_rows; ++i) printf(" %f", Ax[i]);
+      //for(int i=0; i<num_rows; ++i) printf(" %f", Ax[i]);
       printf("\n");
     }
     
     {	
       printf(" -- y(%i)= ", m);
-      for(int i=0; i<m; ++i) printf(" %f", y[i]);
+      //for(int i=0; i<m; ++i) printf(" %f", y[i]);
       printf("\n");
     }
     
@@ -571,9 +569,15 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     printf("Finished R while-loop w/ wr.maxCoeff= ");
     if(num_R > 0) printf("%f\n",wr_max);
     else printf("\n");
+
+    if(wwhile_count > 200) {
+      printf("NNLS :: WARNING!!! wwhile_cout > %i and breaking loop\n",wwhile_count);
+      break;
+    }
 #endif
   } // while(numR && max_wr)
 
+  printf("NNLS::solve -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
   
   free(work);
   free(sP);

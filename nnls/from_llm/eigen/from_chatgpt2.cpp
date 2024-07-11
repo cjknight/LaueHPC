@@ -63,6 +63,7 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
       
       for (int j : R) {
 	double dot_product = w(j);
+	//	std::cout << " -- j, w, max_dot_product, j_max= " << j << " " << w(j) << " " << max_dot_product << " " << j_max << std::endl;
 	if (dot_product > max_dot_product) {
 	  max_dot_product = dot_product;
 	  j_max = j;
@@ -95,7 +96,7 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
 	MatrixXd APP = AP.transpose() * AP;
 	
 	std::cout << " -- APP(" << APP.size() << ")= ";
-	for(int i=0; i<APP.size(); ++i) std::cout << " " << APP(i);
+	//	for(int i=0; i<APP.size(); ++i) std::cout << " " << APP(i);
 	std::cout << std::endl;
       }
       
@@ -103,7 +104,7 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
 	MatrixXd APy = AP.transpose() * y;
 	
 	std::cout << " -- APy(" << APy.size() << ")= ";
-	for(int i=0; i<APy.size(); ++i) std::cout << " " << APy(i);
+	//	for(int i=0; i<APy.size(); ++i) std::cout << " " << APy(i);
 	std::cout << std::endl;
       }
 #endif
@@ -236,13 +237,13 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
 	MatrixXd Ax = A * x;
 	
 	std::cout << " -- Ax(" << Ax.size() << ")= ";
-	for(int i=0; i<Ax.size(); ++i) std::cout << " " << Ax(i);
+	//for(int i=0; i<Ax.size(); ++i) std::cout << " " << Ax(i);
 	std::cout << std::endl;
       }
       
       {	
 	std::cout << " -- y(" << y.size() << ")= ";
-	for(int i=0; i<y.size(); ++i) std::cout << " " << y(i);
+	//for(int i=0; i<y.size(); ++i) std::cout << " " << y(i);
 	std::cout << std::endl;
       }
       
