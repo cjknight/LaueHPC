@@ -17,14 +17,80 @@ using namespace NNLS;
 
 void NNLS::init(int nr, int nc)
 {
+#ifdef _DEBUG
   printf("Calling non_negative_least_squares::init()\n");
+#endif
+
+  int maxv = (nc > nr) ? nc : nr;
+  if(maxv > max_size_vector) {
+    max_size_vector = maxv + 100;
+
+    if(R) free(R);
+    R = (int *) malloc(max_size_vector * sizeof(int));
+    
+    if(P) free(P);
+    P = (int *) malloc(max_size_vector * sizeof(int));
+
+    if(w) free(w);
+    w = (double *) malloc(max_size_vector * sizeof(double));
+    
+    if(wr) free(wr);
+    wr = (double *) malloc(max_size_vector * sizeof(double));
+    
+    if(s) free(s);
+    s = (double *) malloc(max_size_vector * sizeof(double));
+    
+    if(sP) free(sP);
+    sP = (double *) malloc(max_size_vector * sizeof(double));
+    
+    if(APy) free(APy);
+    APy = (double *) malloc(max_size_vector * sizeof(double));
+    
+    if(Ax) free(Ax);
+    Ax = (double *) malloc(max_size_vector * sizeof(double));
+  }
+
+  if(maxv*maxv > max_size_matrix) {
+    max_size_matrix = maxv*maxv + 100;
+
+    if(At) free(At);
+    At = (double *) malloc(max_size_matrix * sizeof(double));
+    
+    if(AP) free(AP);
+    AP = (double *) malloc(max_size_matrix * sizeof(double));
+    
+    if(APt) free(APt);
+    APt = (double *) malloc(max_size_matrix * sizeof(double));
+    
+    if(APP) free(APP);
+    APP = (double *) malloc(max_size_matrix * sizeof(double));
+  }
   
   initialized = true;
 }
 
+void NNLS::finalize()
+{
+  if(R) free(R);
+  if(P) free(P);
+
+  if(w) free(w);
+  if(wr) free(wr);
+  if(s) free(s);
+  if(sP) free(sP);
+  if(APy) free(APy);
+  
+  if(Ax) free(Ax);
+  if(At) free(At);
+  if(AP) free(AP);
+  if(APt) free(APt);
+  if(APP) free(APP);
+}
+
 void NNLS::non_negative_least_squares(double * A, double * y, double * x, int num_rows, int num_cols, double epsilon)
 { 
-  if(!initialized) NNLS::init(num_rows, num_cols);
+  //  if(!initialized)
+  NNLS::init(num_rows, num_cols);
   
   // int m = A.rows();
   // int n = A.cols();
@@ -55,29 +121,22 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
   //        R.insert(i);
   //    }
   
-  int * R = (int *) malloc(n * sizeof(int));
   int num_R = n;
   for(int i=0; i<num_R; ++i) R[i] = i;
   
   //    std::set<int> P;  // Initialize the set P to store selected indices
   
-  int * P = (int *) malloc(n * sizeof(int));
   int num_P = 0;
   
   // VectorXd w = A.transpose() * (y - A * x);
   // x = 0, so x = A.transpose() * y
   
   // -- +++++++++++++++++++++++++++++++++++++
-
-  double * Ax = (double *) malloc(m * sizeof(double));
-  double * At = (double *) malloc(n * m * sizeof(double));
   
   // A.transpose
 
   for(int i=0; i<num_rows; ++i)
     for(int j=0; j<num_cols; ++j) At[j*num_rows + i] = A[i*num_cols+j];
-
-  double * w = (double *) malloc(n * sizeof(double));
 
   // A.transpose * y
   
@@ -97,25 +156,15 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
   //     idx++;
   // }
   
-  double * wr = (double *) malloc(n * sizeof(double));
   for(int i=0; i<num_R; ++i) wr[i] = w[ R[i] ];
   
   // // Create storage for AP
   // MatrixXd AP = A;
-  
-  double * AP = (double *) malloc(n * m * sizeof(double));
 
   // Create storage for s
   // VectorXd s = VectorXd::Zero(n);  // Initialize a vector s with zeros
   
-  double * s = (double *) malloc(n * sizeof(double));
   for(int i=0; i<n; ++i) s[i] = 0.0;
-
-  double * APt = (double *) malloc(m*n*sizeof(double));
-  double * APP = (double *) malloc(m*m*sizeof(double));
-  double * APy = (double *) malloc(m*sizeof(double));
-
-  double * sP = (double *) malloc(n*sizeof(double));
   
   int nrhs = 1;
   int lwork = -1;
@@ -580,17 +629,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
   printf("NNLS::solve -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
   
   free(work);
-  free(sP);
-  
-  free(APt);
-  free(APP);
-  free(APy);
-  
-  free(wr);
-  free(w);
-  free(Ax);
-  free(At);
-  free(R);
 }
 
 int main() {

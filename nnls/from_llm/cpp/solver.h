@@ -11,9 +11,28 @@ namespace py = pybind11;
 namespace NNLS {
 
   void init(int nr, int nc);
+  void finalize();
   void non_negative_least_squares(double * A, double * y, double * x, int num_rows, int num_cols, double epsilon = 1e-6);
   
   bool initialized = false;
+
+  int max_size_vector = 0;
+  int max_size_matrix = 0;
+
+  int * R = nullptr;
+  int * P = nullptr;
+
+  double * w = nullptr;
+  double * wr = nullptr;
+  double * s = nullptr;
+  double * sP = nullptr;
+  double * APy = nullptr;
+  
+  double * Ax = nullptr;
+  double * At = nullptr;
+  double * AP = nullptr;
+  double * APt = nullptr;
+  double * APP = nullptr;
 
 #if defined (_USE_PYBIND)
   void solve(py::array_t<double> A_, py::array_t<double> b_, py::array_t<double> x_, double epsilon = 1e-6)
@@ -40,6 +59,7 @@ namespace NNLS {
 PYBIND11_MODULE(my_nnls_solver, m) {
   m.doc() = "Python interface to solver"; // Add a docstring to the module
   m.def("solve", &NNLS::solve, "Solve Ax=b for x",py::arg("A"),py::arg("b"),py::arg("x"),py::arg("epsilon") = 1e-6);
+  m.def("finalize", &NNLS::finalize, "Shutdown library");
 }
 
 #endif
