@@ -18,6 +18,7 @@ namespace NNLS {
 
   int max_size_vector = 0;
   int max_size_matrix = 0;
+  int max_lwork = 0;
 
   int * R = nullptr;
   int * P = nullptr;
@@ -27,6 +28,7 @@ namespace NNLS {
   double * s = nullptr;
   double * sP = nullptr;
   double * APy = nullptr;
+  double * work = nullptr;
   
   double * Ax = nullptr;
   double * AP = nullptr;

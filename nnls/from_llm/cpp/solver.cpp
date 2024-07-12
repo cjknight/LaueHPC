@@ -68,6 +68,23 @@ void NNLS::init(int nr, int nc)
     if(APP) free(APP);
     APP = (double *) malloc(max_size_matrix * sizeof(double));
   }
+
+  int nrhs = 1;
+  int lwork = -1;
+  int info;
+  
+  double _work[1];
+  
+  dgels_((const char *) "N", &nr, &nr, &nrhs, nullptr, &nr, nullptr, &nr, &(_work[0]), &lwork, &info);
+  
+  lwork = static_cast<int>(_work[0] + 0.5);
+  
+  if(lwork > max_lwork) {
+    max_lwork = lwork;
+    
+    if(work) free(work);
+    work = (double *) malloc(max_lwork * sizeof(double));
+  }
   
   initialized = true;
 }
@@ -164,29 +181,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
   for(int i=0; i<n; ++i) s[i] = 0.0;
   
   int nrhs = 1;
-  int lwork = -1;
   int info;
-
-#ifdef _DEBUG
-  printf("about to call dgels_()\n");
-#endif
-
-  double * work = (double *) malloc(sizeof(double));
-  
-  dgels_((const char *) "N", &num_rows, &num_rows, &nrhs, APP, &num_rows, APy, &num_rows, work, &lwork, &info);
-
-#ifdef _DEBUG
-  printf("lwork= %i  work[0]= %f  info= %i\n",lwork,work[0],info);
-#endif
-  
-  lwork = static_cast<int>(work[0] + 0.5);
 
 #ifdef _DEBUG
   printf("updated value of lwork= %i\n\n",lwork);
 #endif
-  
-  free(work);
-  work = (double *) malloc(lwork * sizeof(double));
   
   // while (!R.empty() && wr.maxCoeff() > epsilon) {
 
@@ -200,7 +199,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
     wwhile_count++;
     
-    //     double max_dot_product = -std::numeric_limits<double>::infinity();
     double max_dot_product = -std::numeric_limits<double>::infinity();
 
     int j_max = -1;
@@ -313,7 +311,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     //    printf("calling initial dgels_() w/ lwork= %i\n",lwork);
 #endif
     
-    dgels_((const char *) "N", &num_P, &num_P, &nrhs, APP, &num_P, APy, &num_P, work, &lwork, &info);    
+    dgels_((const char *) "N", &num_P, &num_P, &nrhs, APP, &num_P, APy, &num_P, work, &max_lwork, &info);    
 
     for(int i=0; i<num_P; ++i) sP[i] = APy[i];
 
@@ -336,7 +334,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     double min_sP = sP[0];
     for(int j=1; j<num_P; ++j) if(sP[j] < min_sP) min_sP = sP[j];
     
-    //     while (sP.minCoeff() <= 0) {
     while(min_sP < zero) {
 #ifdef _DEBUG
       printf(" -- Starting while() loop w/ min_sP= %f\n",min_sP);
@@ -484,7 +481,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       }
 
       //      printf("about to call dgels_()\n");
-      dgels_((const char *) "N", &num_P, &num_P, &nrhs, APP, &num_P, APy, &num_P, work, &lwork, &info);
+      dgels_((const char *) "N", &num_P, &num_P, &nrhs, APP, &num_P, APy, &num_P, work, &max_lwork, &info);
       //      printf("  -- finished.\n");
       
       for(int i=0; i<num_P; ++i) sP[i] = APy[i];
@@ -594,7 +591,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
   printf("NNLS::solve -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
   
-  free(work);
+  //  free(work);
 }
 
 int main() {
