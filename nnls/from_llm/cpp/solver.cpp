@@ -475,10 +475,12 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       // APy = AP.tranpose() * y
       
       //      printf(" -- Computing APy\n");
-      for(int i=0; i<num_P; ++i) {
-	double val = 0.0;
-	for(int j=0; j<num_rows; ++j) val += AP[j*num_P+i] * y[j];
-	APy[i] = val;
+
+      {
+	const double alpha = 1.0;
+	const double beta = 0.0;
+	const int inc = 1;
+	dgemv_((const char *) "N", &num_P, &num_rows, &alpha, AP, &num_P, y, &inc, &beta, APy, &inc);
       }
 
       //      printf("about to call dgels_()\n");
@@ -511,19 +513,21 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     //     w = A.transpose() * (y - A * x);
 
     // A * x
-    
-    for(int i=0; i<num_rows; ++i) {
-      double val = 0.0;
-      for(int j=0; j<num_cols; ++j) val += A[i*num_cols + j] * x[j];
-      Ax[i] = val;
+    {
+      const double alpha = 1.0;
+      const double beta = 0.0;
+      const int inc = 1;
+      dgemv_((const char *) "T", &num_cols, &num_rows, &alpha, A, &num_cols, x, &inc, &beta, Ax, &inc);
     }
     
     // A.transpose * (y-Ax)
-    
-    for(int i=0; i<n; ++i) {
-      double val = 0.0;
-      for(int j=0; j<m; ++j) val += A[j*n+i] * (y[j] - Ax[j]);
-      w[i] = val;
+    {
+      for(int i=0; i<m; ++i) Ax[i] = y[i] - Ax[i];
+	
+      const double alpha = 1.0;
+      const double beta = 0.0;
+      const int inc = 1;
+      dgemv_((const char *) "N", &n, &m, &alpha, A, &n, Ax, &inc, &beta, w, &inc);
     }
     
     //     wr.resize(R.size());
