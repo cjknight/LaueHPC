@@ -11,6 +11,10 @@ extern "C" {
   void dgels_(const char * trans, const int * m, const int * n, const int * nrhs,
 	      double * A, const int * lda, double * B, const int * ldb, double * work,                     
 	      int * lwork, int * info);
+
+  void dgemv_(const char * trans, const int * m, const int * n, const double * alpha,
+	      const double * a, const int * lda, const double * x, const int * incx,
+             const double * beta, double * y, const int * incy);
 }
 
 using namespace NNLS;
@@ -131,10 +135,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
   // A.transpose * y
   
-  for(int i=0; i<n; ++i) {
-    double val = 0.0;
-    for(int j=0; j<m; ++j) val += A[j*n+i] * y[j];
-    w[i] = val;
+  {
+    const double alpha = 1.0;
+    const double beta = 0.0;
+    const int inc = 1;
+    dgemv_((const char *) "T", &num_cols, &num_rows, &alpha, A, &num_cols, y, &inc, &beta, w, &inc);
   }
   
   // -- +++++++++++++++++++++++++++++++++++++
