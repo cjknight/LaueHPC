@@ -60,9 +60,6 @@ void NNLS::init(int nr, int nc)
     if(AP) free(AP);
     AP = (double *) malloc(max_size_matrix * sizeof(double));
     
-    if(APt) free(APt);
-    APt = (double *) malloc(max_size_matrix * sizeof(double));
-    
     if(APP) free(APP);
     APP = (double *) malloc(max_size_matrix * sizeof(double));
   }
@@ -83,7 +80,6 @@ void NNLS::finalize()
   
   if(Ax) free(Ax);
   if(AP) free(AP);
-  if(APt) free(APt);
   if(APP) free(APP);
 }
 
@@ -278,16 +274,8 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
     //     VectorXd sP = (AP.transpose() * AP).ldlt().solve(AP.transpose() * y);  // Compute the least squares solution for the selected indices
 
-    // APt = AP.transpose()
-    
-    for(int i=0; i<num_rows; ++i)
-      for(int j=0; j<num_P; ++j) APt[j*num_rows+i] = AP[i*num_P+j];
-
 #ifdef _DEBUG
     // printf(" -- num_P= %i  num_rows= %i\n",num_P,num_rows);
-    // printf(" -- AP^T(%i)= ",num_P*num_rows);
-    // for(int i=0; i<num_P*num_rows; ++i) printf(" %f",APt[i]);
-    // printf("\n");
 #endif
     
     // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P) = num_P x num_P
@@ -297,9 +285,9 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
 	double val = 0.0;
 	for(int k=0; k<num_rows; ++k) {
-	  val += APt[i*num_rows+k] * AP[k*num_P+j];
+	  val += AP[k*num_P+i] * AP[k*num_P+j];
 #ifdef _DEBUG
-	  //printf(" -- AP^T.AP :: ij= %i %i  k= %i  APt= %f  AP= %f  val= %f\n",i,j,k,APt[i*num_P+k],AP[j*num_rows+k],val);
+	  //printf(" -- AP^T.AP :: ij= %i %i  k= %i  APt= %f  AP= %f  val= %f\n",i,j,k,AP[k*num_P+i],AP[k*num_P+j],val);
 #endif
 	}
 	APP[i*num_P+j] = val;
@@ -315,7 +303,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
     for(int i=0; i<num_P; ++i) {
       double val = 0.0;
-      for(int j=0; j<num_rows; ++j) val += APt[i*num_rows+j] * y[j];
+      for(int j=0; j<num_rows; ++j) val += AP[j*num_P+i] * y[j];
       APy[i] = val;
     }
 
@@ -473,12 +461,8 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       for(int i=0; i<n; ++i) s[i] = 0.0;
       
       //         sP = (AP.transpose() * AP).ldlt().solve(AP.transpose() * y);
-     
-      // APt = AP.transpose()
       
-      //      printf(" -- Computing APt  num_rows= %i  num_P= %i\n",num_rows,num_P);
-      for(int i=0; i<num_rows; ++i)
-	for(int j=0; j<num_P; ++j) APt[j*num_rows+i] = AP[i*num_P+j];
+      //      printf(" -- Computing APP num_rows= %i  num_P= %i\n",num_rows,num_P);
       
       // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P)
       
@@ -486,7 +470,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       for(int i=0; i<num_P; ++i)
 	for(int j=0; j<num_P; ++j) {
 	  double val = 0.0;
-	  for(int k=0; k<num_rows; ++k) val += APt[i*num_rows+k] * AP[k*num_P+j];
+	  for(int k=0; k<num_rows; ++k) val += AP[k*num_P+i] * AP[k*num_P+j];
 	  APP[i*num_P+j] = val;
 	}
       
@@ -495,7 +479,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       //      printf(" -- Computing APy\n");
       for(int i=0; i<num_P; ++i) {
 	double val = 0.0;
-	for(int j=0; j<num_rows; ++j) val += APt[i*num_rows+j] * y[j];
+	for(int j=0; j<num_rows; ++j) val += AP[j*num_P+i] * y[j];
 	APy[i] = val;
       }
 
