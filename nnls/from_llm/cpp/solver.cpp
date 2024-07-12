@@ -52,9 +52,6 @@ void NNLS::init(int nr, int nc)
 
   if(maxv*maxv > max_size_matrix) {
     max_size_matrix = maxv*maxv + 100;
-
-    if(At) free(At);
-    At = (double *) malloc(max_size_matrix * sizeof(double));
     
     if(AP) free(AP);
     AP = (double *) malloc(max_size_matrix * sizeof(double));
@@ -81,7 +78,6 @@ void NNLS::finalize()
   if(APy) free(APy);
   
   if(Ax) free(Ax);
-  if(At) free(At);
   if(AP) free(AP);
   if(APt) free(APt);
   if(APP) free(APP);
@@ -132,17 +128,12 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
   // x = 0, so x = A.transpose() * y
   
   // -- +++++++++++++++++++++++++++++++++++++
-  
-  // A.transpose
-
-  for(int i=0; i<num_rows; ++i)
-    for(int j=0; j<num_cols; ++j) At[j*num_rows + i] = A[i*num_cols+j];
 
   // A.transpose * y
   
   for(int i=0; i<n; ++i) {
     double val = 0.0;
-    for(int j=0; j<m; ++j) val += At[i*m+j] * y[j];
+    for(int j=0; j<m; ++j) val += A[j*n+i] * y[j];
     w[i] = val;
   }
   
@@ -227,7 +218,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
     //     P.insert(j_max);  // Add the selected index to P
 
-#if 0 // does it need to be ordered?? I don't think so 
+#if 1 // does it need to be ordered?? I don't think so 
     P[num_P] = j_max;
 #else
     {
@@ -432,7 +423,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 	  for(int i=ii; i<num_P; ++i) P[i] = P[i+1];
 	  num_P--;
 
-#if 0
+#if 1
 	  R[num_R] = ii_;
 #else
 	  {
@@ -532,16 +523,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
     //     w = A.transpose() * (y - A * x);
 
-    // A.transpose
-
-    for(int i=0; i<num_rows; ++i)
-      for(int j=0; j<num_cols; ++j) {
-#ifdef _DEBUG
-	//	printf(" -- ij= %i %i  indx1= %i  indx2= %i  A= %f\n",i,j,j*num_rows+i,i*num_cols+j,A[i*num_cols+j]);
-#endif
-	At[j*num_rows + i] = A[i*num_cols+j];
-      }
-
     // A * x
     
     for(int i=0; i<num_rows; ++i) {
@@ -554,7 +535,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
     for(int i=0; i<n; ++i) {
       double val = 0.0;
-      for(int j=0; j<m; ++j) val += At[i*m+j] * (y[j] - Ax[j]);
+      for(int j=0; j<m; ++j) val += A[j*n+i] * (y[j] - Ax[j]);
       w[i] = val;
     }
     
@@ -576,12 +557,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     {	
       printf(" -- A(%i)= ", num_rows*num_cols);
       //for(int i=0; i<num_rows*num_cols; ++i) printf(" %f", A[i]);
-      printf("\n");
-    }
-    
-    {	
-      printf(" -- At(%i)= ", num_rows*num_cols);
-      //for(int i=0; i<num_rows*num_cols; ++i) printf(" %f", At[i]);
       printf("\n");
     }
     

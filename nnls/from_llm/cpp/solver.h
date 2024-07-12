@@ -29,7 +29,6 @@ namespace NNLS {
   double * APy = nullptr;
   
   double * Ax = nullptr;
-  double * At = nullptr;
   double * AP = nullptr;
   double * APt = nullptr;
   double * APP = nullptr;
