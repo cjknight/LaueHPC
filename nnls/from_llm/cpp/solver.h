@@ -30,7 +30,6 @@ namespace NNLS {
   
   double * Ax = nullptr;
   double * AP = nullptr;
-  double * APt = nullptr;
   double * APP = nullptr;
 
 #if defined (_USE_PYBIND)

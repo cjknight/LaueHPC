@@ -15,6 +15,11 @@ extern "C" {
   void dgemv_(const char * trans, const int * m, const int * n, const double * alpha,
 	      const double * a, const int * lda, const double * x, const int * incx,
              const double * beta, double * y, const int * incy);
+  
+  void dgemm_(const char * transa, const char * transb, const int * m, const int * n,
+	      const int * k, const double * alpha, const double * a, const int * lda,
+	      const double * b, const int * ldb, const double * beta, double * c,
+	      const int * ldc);
 }
 
 using namespace NNLS;
@@ -280,18 +285,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
     // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P) = num_P x num_P
 
-    for(int i=0; i<num_P; ++i)
-      for(int j=0; j<num_P; ++j) {
-
-	double val = 0.0;
-	for(int k=0; k<num_rows; ++k) {
-	  val += AP[k*num_P+i] * AP[k*num_P+j];
-#ifdef _DEBUG
-	  //printf(" -- AP^T.AP :: ij= %i %i  k= %i  APt= %f  AP= %f  val= %f\n",i,j,k,AP[k*num_P+i],AP[k*num_P+j],val);
-#endif
-	}
-	APP[i*num_P+j] = val;
-      }
+    {
+      const double alpha = 1.0;
+      const double beta = 0.0;
+      dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP, &num_P, AP, &num_P, &beta, APP, &num_P);
+    }
 
 #ifdef _DEBUG
     printf(" -- APP(%i)= ",num_P*num_P);
@@ -467,12 +465,12 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P)
       
       //      printf(" -- Computing APP\n");
-      for(int i=0; i<num_P; ++i)
-	for(int j=0; j<num_P; ++j) {
-	  double val = 0.0;
-	  for(int k=0; k<num_rows; ++k) val += AP[k*num_P+i] * AP[k*num_P+j];
-	  APP[i*num_P+j] = val;
-	}
+
+      {
+	const double alpha = 1.0;
+	const double beta = 0.0;
+	dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP, &num_P, AP, &num_P, &beta, APP, &num_P);
+      }
       
       // APy = AP.tranpose() * y
       
