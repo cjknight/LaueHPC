@@ -13,7 +13,10 @@ t_scipy = 0.0
 t_cpp = 0.0
 t_eigen = 0.0
 
-for indx in range(10,30):
+ldiff_eigen = 0.0
+ldiff_cpp = 0.0
+
+for indx in range(100):
     print("indx= ", indx)
 #    data_file = '../../../python/data/data-' + str(indx) + '.npy'
 #    kernel_file = '../../../python/kernel/kernel-' + str(indx) + '.npy'
@@ -57,6 +60,9 @@ for indx in range(10,30):
     diff1 = sum( (x1 - x0) * (x1 - x0) )
     diff2 = sum( (x2 - x0) * (x2 - x0) )
 
+    if diff1 > ldiff_cpp: ldiff_cpp = diff1
+    if diff2 > ldiff_eigen: ldiff_eigen = diff2
+
     print("shape(A)= ", np.shape(A)," residuals (scipy, cpp, eigen)= ", residual0, residual1, residual2, "diff(cpp, eigen) = ", "{:e}".format(diff1), "{:e}".format(diff2))
 
 
@@ -64,5 +70,6 @@ print("t_scipy= ", t_scipy, " ms")
 print("t_eigen= ", t_eigen, " ms")
 print("t_cpp=   ", t_cpp, " ms")
 
+print("Largest differences (cpp, eigen): ", "{:e}".format(ldiff_cpp), "{:e}".format(ldiff_eigen))
 
 cpp_nnls.finalize()

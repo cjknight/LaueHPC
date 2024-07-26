@@ -16,6 +16,9 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
 
     const double zero = 1e-12;
     
+    int wwhile_count = 0;
+    int swhile_count = 0;
+  
 #ifdef _DEBUG
     std::cout << "num_rows(m)= " << m << " num_cols(n)= " << n << std::endl;
     
@@ -54,6 +57,9 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
     VectorXd s = VectorXd::Zero(n);  // Initialize a vector s with zeros
 
     while (!R.empty() && wr.maxCoeff() > epsilon) {
+      
+      wwhile_count++;
+    
 #ifdef _DEBUG
       std::cout << "Starting R while-loop w/ wr.maxCoeff= " << wr.maxCoeff() << std::endl;
 #endif
@@ -130,6 +136,8 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
       
       //      while (sP.minCoeff() <= 0) {
       while (sP.minCoeff() < zero) {
+      swhile_count++;	
+	
 #ifdef _DEBUG	
 	std::cout << " -- Starting while() loop w/ min_sP= " << sP.minCoeff() << std::endl;
 #endif
@@ -278,6 +286,8 @@ VectorXd non_negative_least_squares(const MatrixXd& A, const VectorXd& y, double
       else std::cout << std::endl;
 #endif
     }
+    
+    printf("NNLS::solve(eigen) -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
     
     return x;
 }

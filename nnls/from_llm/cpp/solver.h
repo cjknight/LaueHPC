@@ -22,6 +22,7 @@ namespace NNLS {
 
   int * R = nullptr;
   int * P = nullptr;
+  int * ipiv = nullptr;
 
   double * w = nullptr;
   double * wr = nullptr;
@@ -33,6 +34,8 @@ namespace NNLS {
   double * Ax = nullptr;
   double * AP = nullptr;
   double * APP = nullptr;
+
+  double timer[14];
 
 #if defined (_USE_PYBIND)
   void solve(py::array_t<double> A_, py::array_t<double> b_, py::array_t<double> x_, double epsilon = 1e-6)

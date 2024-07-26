@@ -3,15 +3,30 @@
 #include <set>
 #include <limits>
 
-#include "solver.h"
+#include <omp.h>
 
-//#define _DEBUG
+#include "solver.h"
 
 extern "C" {
   void dgels_(const char * trans, const int * m, const int * n, const int * nrhs,
 	      double * A, const int * lda, double * B, const int * ldb, double * work,                     
 	      int * lwork, int * info);
 
+  void dsyrk_(const char * uplo, const char * trans, const int * n, const int * k, const double * alpha,
+	      const double * a, const int * lda, const double * beta, double * c, const int * ldc);
+  
+  void dsytrf_(const char * uplo, const int * n, double * a, const int * lda,
+	       int * ipiv, double * work, int * lwork, int * info);
+  
+  void dsysv_(const char * uplo, const int * n, const int * nrhs, double * a,
+	      const int * lda, int * ipiv, double * b, const int * ldb,
+	      double * work, int * lwork, int * info);
+
+  void dgetrf_(int * m, int * n, double * A, int * lda, int * ipiv, int * info);
+
+  void dgetrs_(char * trans, int * n, int * nrhs, double * A, int * lda, int * ipiv, 
+	       double * B, int * ldb, int * info);
+  
   void dgemv_(const char * trans, const int * m, const int * n, const double * alpha,
 	      const double * a, const int * lda, const double * x, const int * incx,
              const double * beta, double * y, const int * incy);
@@ -26,10 +41,12 @@ using namespace NNLS;
 
 void NNLS::init(int nr, int nc)
 {
-#ifdef _DEBUG
-  printf("Calling non_negative_least_squares::init()\n");
-#endif
-
+  double t0_ = omp_get_wtime();
+  
+  if(!initialized) {
+    for(int i=0; i<14; ++i) timer[i] = 0.0;
+  }
+  
   int maxv = (nc > nr) ? nc : nr;
   if(maxv > max_size_vector) {
     max_size_vector = maxv + 100;
@@ -40,6 +57,9 @@ void NNLS::init(int nr, int nc)
     if(P) free(P);
     P = (int *) malloc(max_size_vector * sizeof(int));
 
+    if(ipiv) free(ipiv);
+    ipiv = (int *) malloc(max_size_vector * sizeof(int));
+    
     if(w) free(w);
     w = (double *) malloc(max_size_vector * sizeof(double));
     
@@ -78,6 +98,8 @@ void NNLS::init(int nr, int nc)
   dgels_((const char *) "N", &nr, &nr, &nrhs, nullptr, &nr, nullptr, &nr, &(_work[0]), &lwork, &info);
   
   lwork = static_cast<int>(_work[0] + 0.5);
+
+  if(maxv * 64 > lwork) lwork = maxv * 64;
   
   if(lwork > max_lwork) {
     max_lwork = lwork;
@@ -87,12 +109,15 @@ void NNLS::init(int nr, int nc)
   }
   
   initialized = true;
+
+  timer[1] += omp_get_wtime() - t0_;
 }
 
 void NNLS::finalize()
 {
   if(R) free(R);
   if(P) free(P);
+  if(ipiv) free(ipiv);
 
   if(w) free(w);
   if(wr) free(wr);
@@ -103,12 +128,31 @@ void NNLS::finalize()
   if(Ax) free(Ax);
   if(AP) free(AP);
   if(APP) free(APP);
+
+  printf("\nNNLS :: Timer Summary\n");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",0, timer[0]*1000.0, " :: NNLS non_negative_least_squares()");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",1, timer[1]*1000.0, " :: NNLS init()");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",2, timer[2]*1000.0, " :: NNLS before while-R loop");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",3, timer[3]*1000.0, " :: NNLS while-R loop");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",4, timer[4]*1000.0, " :: NNLS R :: before while-sP loop");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",5, timer[5]*1000.0, " :: NNLS R :: while-sP loop");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",6, timer[6]*1000.0, " :: NNLS R :: after while-sP loop");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",7, timer[7]*1000.0, " :: NNLS while-R loop :: setup");
+  
+  printf(" -- i= %i  timer= %10.5f ms %s\n",8, timer[8]*1000.0, " :: NNLS while-R loop :: takeP");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",9, timer[9]*1000.0, " :: NNLS while-R loop :: dgemm");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",10, timer[10]*1000.0, " :: NNLS while-R loop :: dgemv");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",11, timer[11]*1000.0, " :: NNLS while-R loop :: dgels");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",12, timer[12]*1000.0, " :: NNLS ");
+  printf(" -- i= %i  timer= %10.5f ms %s\n",13, timer[13]*1000.0, " :: NNLS while-R loop :: takeP");
 }
 
 void NNLS::non_negative_least_squares(double * A, double * y, double * x, int num_rows, int num_cols, double epsilon)
-{ 
+{  
   //  if(!initialized)
   NNLS::init(num_rows, num_cols);
+ 
+  double t0_ = omp_get_wtime();
   
   // int m = A.rows();
   // int n = A.cols();
@@ -119,16 +163,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
   
   int wwhile_count = 0;
   int swhile_count = 0;
-  
-#if defined(_DEBUG)
-  printf("num_rows(m)= %i  num_cols(n)= %i\n",num_rows,num_cols);
-  
-  {	
-    printf(" -- A(%i)= ", num_rows*num_cols);
-    //    for(int i=0; i<num_rows*num_cols; ++i) printf(" %f", A[i]);
-    printf("\n");
-  }
-#endif
   
   // VectorXd x = VectorXd::Zero(n);  // Initialize the solution vector x with zeros
 
@@ -153,7 +187,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
   // A.transpose * y
   
-  {
+  {    
     const double alpha = 1.0;
     const double beta = 0.0;
     const int inc = 1;
@@ -182,21 +216,18 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
   
   int nrhs = 1;
   int info;
-
-#ifdef _DEBUG
-  printf("updated value of lwork= %i\n\n",lwork);
-#endif
   
   // while (!R.empty() && wr.maxCoeff() > epsilon) {
 
   double wr_max = w[ R[0] ];
   for(int i=1; i<num_R; ++i) if(wr_max < w[ R[i] ]) wr_max = w[ R[i] ];
+
+  double t1_ = omp_get_wtime();
+  timer[2] += t1_ - t0_;
   
   while( (num_R > 0) && wr_max > epsilon) {
-#ifdef _DEBUG
-    printf("Starting R while-loop w/ wr.maxCoeff= %f\n",wr_max);
-#endif
-
+    double t2_ = omp_get_wtime();
+    
     wwhile_count++;
     
     double max_dot_product = -std::numeric_limits<double>::infinity();
@@ -222,16 +253,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
     //     P.insert(j_max);  // Add the selected index to P
 
-#if 1 // does it need to be ordered?? I don't think so 
     P[num_P] = j_max;
-#else
-    {
-      int i;
-      for(i=0; i<num_P; ++i) if(j_max < P[i]) break;
-      for(int j=num_P; j>i; --j) P[j] = P[j-1];
-      P[i] = j_max;
-    }
-#endif
     num_P++;
     
     //     R.erase(j_max);   // Remove the selected index from R
@@ -244,13 +266,8 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     for(int i=indx; i<num_R; ++i) R[i] = R[i+1];
     num_R--;
 
-#ifdef _DEBUG
-    printf(" -- num_R= %i  num_P= %i  j_max= %i\n",num_R, num_P, j_max);
-    
-    printf(" -- P(%i)= ",num_P);
-    for(int i=0; i<num_P; ++i) printf(" %i",P[i]);
-    printf("\n");
-#endif
+    double t7_ = omp_get_wtime();
+    timer[7] += t7_ - t2_;
     
     //     //AP = AP.colwise().take(P);
     //     std::vector<int> pidx(P.begin(), P.end());
@@ -260,40 +277,55 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
     for(int i=0; i<num_P; ++i) {
       int indx = P[i];
-      for(int j=0; j<num_rows; ++j) {
-#ifdef _DEBUG
-	//	printf(" -- ij= %i %i  indx1= %i  indx2= %i  A= %f\n",i,j,j*num_cols+i,j*num_cols+indx,A[j*num_cols+indx]);
-#endif
-	AP[j*num_P+i] = A[j*num_cols+indx];
-      }
+      for(int j=0; j<num_rows; ++j) AP[j*num_P+i] = A[j*num_cols+indx];
     }
 
-#ifdef _DEBUG
-    //printf(" -- num_P= %i  num_rows= %i\n",num_P,num_rows);
-    printf(" -- AP(%i)= ",num_P*num_rows);
-    //    for(int i=0; i<num_P*num_rows; ++i) printf(" %f",AP[i]);
-    printf("\n");
-#endif
+    double t8_ = omp_get_wtime();
+    timer[8] += t8_ - t7_;
     
     //     VectorXd sP = (AP.transpose() * AP).ldlt().solve(AP.transpose() * y);  // Compute the least squares solution for the selected indices
-
-#ifdef _DEBUG
-    // printf(" -- num_P= %i  num_rows= %i\n",num_P,num_rows);
-#endif
     
     // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P) = num_P x num_P
 
-    {
-      const double alpha = 1.0;
-      const double beta = 0.0;
-      dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP, &num_P, AP, &num_P, &beta, APP, &num_P);
-    }
+      {
+	const double alpha = 1.0;
+	const double beta = 0.0;
+	dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP, &num_P, AP, &num_P, &beta, APP, &num_P);
+      }
 
-#ifdef _DEBUG
-    printf(" -- APP(%i)= ",num_P*num_P);
-    //    for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
-    printf("\n");
+#if 0
+    if(num_P < 3) {
+
+      printf("num_rows= %i  num_P= %i\n",num_rows,num_P);
+      printf("APP(dgemm)= ");
+      for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
+      printf("\n");
+      for(int i=0; i<num_P*num_P; ++i) APP[i] = -1.0;
+      
+      {
+	const double alpha = 1.0;
+	const double beta = 0.0;
+	dsyrk_((const char *) "L", (const char *) "T", &num_P, &num_rows, &alpha, AP, &num_rows, &beta, APP, &num_P);
+      }
+      
+      // fill upper APP
+      
+      printf("APP(dsyrk)= ");
+      for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
+      printf("\n");
+      
+      for(int i=0; i<num_P-1; ++i)
+	for(int j=i+1; j<num_P; ++j) APP[i*num_P+j] = APP[j*num_P+i];
+      
+      printf("APP(fill)= ");
+      for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
+      printf("\n");
+
+      if(num_P == 3) exit(1);
+    }
 #endif
+    double t9_ = omp_get_wtime();
+    timer[9] += t9_ - t8_;
     
     // APy = AP.tranpose() * y // (num_P x num_rows) * num_rows
 
@@ -303,24 +335,29 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       APy[i] = val;
     }
 
-#ifdef _DEBUG
-    printf(" -- APy(%i)= ",num_P);
-    //    for(int i=0; i<num_P; ++i) printf(" %f",APy[i]);
-    printf("\n");
-    
-    //    printf("calling initial dgels_() w/ lwork= %i\n",lwork);
+    double t6_ = omp_get_wtime();
+    timer[10] += t6_ - t9_;
+#if 1
+    // dsytrf_((const char *) "U", &num_P, APP, &num_P, ipiv, work, &max_lwork, &info);
+    // dsysv_((const char *) "U", &num_P, &nrhs, APP, &num_P, ipiv, APy, &num_P, work, &max_lwork, &info);
+
+    dgetrf_(&num_P, &num_P, APP, &num_P, ipiv, &info);
+    dgetrs_((char *) "N", &num_P, &nrhs, APP, &num_P, ipiv, APy, &num_P, &info);
+#else
+    dgels_((const char *) "N", &num_P, &num_P, &nrhs, APP, &num_P, APy, &num_P, work, &max_lwork, &info);
 #endif
     
-    dgels_((const char *) "N", &num_P, &num_P, &nrhs, APP, &num_P, APy, &num_P, work, &max_lwork, &info);    
+    // printf("num_P= %i  APy= ",num_P);
+    // for(int i=0; i<num_P; ++i) printf(" %f",APy[i]);
+    // printf("\n");
 
+    //    if(num_P == 2) exit(1);
+    
+    double t10_ = omp_get_wtime();
+    timer[11] += t10_ - t6_;
+    
     for(int i=0; i<num_P; ++i) sP[i] = APy[i];
 
-#ifdef _DEBUG
-    printf(" -- sP(%i)= ",num_P);
-    for(int i=0; i<num_P; ++i) printf(" %f",sP[i]);
-    printf("\n");
-#endif
-    
     //     s = VectorXd::Zero(n);  // Initialize a vector s with zeros
     //     int idx = 0;
     //     for (auto pi = P.begin(); pi != P.end(); pi++) 
@@ -334,11 +371,10 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     double min_sP = sP[0];
     for(int j=1; j<num_P; ++j) if(sP[j] < min_sP) min_sP = sP[j];
     
+    double t3_ = omp_get_wtime();
+    timer[4] += t3_ - t2_;
+    
     while(min_sP < zero) {
-#ifdef _DEBUG
-      printf(" -- Starting while() loop w/ min_sP= %f\n",min_sP);
-#endif
-
       swhile_count++;
       
       double alpha = std::numeric_limits<double>::infinity();  // Initialize alpha as positive infinity
@@ -355,14 +391,9 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       for(int i=0; i<num_P; ++i) {
 	if(s[P[i]] < zero) {
 	  double alpha_candidate = x[P[i]] / (x[P[i]] - s[P[i]]);
-	  //	  printf(" -- -- i= %i  x= %f  P= %i  s= %f  alpha_candidate= %f  alpha= %f\n",i,x[i],P[i],s[P[i]],alpha_candidate,alpha);
 	  if(alpha_candidate < alpha) alpha = alpha_candidate;
 	}
       }
-
-#ifdef _DEBUG
-      printf(" -- -- alpha= %f\n",alpha);
-#endif
 
       //         // Update the solution vector x with the computed alpha
       //         x += alpha * (s - x);
@@ -379,64 +410,20 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       //                 ++it;
       //             }
       //         }
-
-
-#ifdef _DEBUG
-      {	
-	printf(" -- x(%i)= ", num_cols);
-	for(int i=0; i<num_cols; ++i) printf(" %f", x[i]);
-	printf("\n");
-      }
-#endif
       
-#ifdef _DEBUG
-      printf(" -- num_R= %i  num_P= %i\n",num_R, num_P);
-      
-      printf(" -- P(%i)= ",num_P);
-      for(int i=0; i<num_P; ++i) printf(" %i",P[i]);
-      printf("\n");
-      
-      printf(" -- R(%i)= ",num_R);
-      for(int i=0; i<num_R; ++i) printf(" %i",R[i]);
-      printf("\n");
-#endif
-      
-      //      printf("Shifting P to R...\n");
       int ii = 0;
       while(ii < num_P) {
-	//	printf(" -- ii= %i  P= %i  x= %f\n",ii,P[ii],x[P[ii]]);
 	if(x[P[ii]] < zero) {
 	  int ii_ = P[ii];
 	  
 	  for(int i=ii; i<num_P; ++i) P[i] = P[i+1];
 	  num_P--;
 
-#if 1
 	  R[num_R] = ii_;
-#else
-	  {
-	    int i;
-	    for(i=0; i<num_R; ++i) if(ii_ < R[i]) break;
-	    for(int j=num_R; j>i; --j) R[j] = R[j-1];
-	    R[i] = ii_;
-	  }
-#endif
+	  
 	  num_R++;
 	} else ii++;
       }
-      //      printf(" -- finished\n");
-      
-#ifdef _DEBUG
-      printf(" -- num_R= %i  num_P= %i\n",num_R, num_P);
-      
-      printf(" -- P(%i)= ",num_P);
-      for(int i=0; i<num_P; ++i) printf(" %i",P[i]);
-      printf("\n");
-      
-      printf(" -- R(%i)= ",num_R);
-      for(int i=0; i<num_R; ++i) printf(" %i",R[i]);
-      printf("\n");
-#endif
       
       //         // Recompute the submatrix AP and the least squares solution sP
       //         //AP = A;
@@ -457,11 +444,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       
       //         sP = (AP.transpose() * AP).ldlt().solve(AP.transpose() * y);
       
-      //      printf(" -- Computing APP num_rows= %i  num_P= %i\n",num_rows,num_P);
-      
       // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P)
-      
-      //      printf(" -- Computing APP\n");
 
       {
 	const double alpha = 1.0;
@@ -470,8 +453,6 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       }
       
       // APy = AP.tranpose() * y
-      
-      //      printf(" -- Computing APy\n");
 
       {
 	const double alpha = 1.0;
@@ -479,10 +460,15 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 	const int inc = 1;
 	dgemv_((const char *) "N", &num_P, &num_rows, &alpha, AP, &num_P, y, &inc, &beta, APy, &inc);
       }
+#if 1
+    // dsytrf_((const char *) "U", &num_P, APP, &num_P, ipiv, work, &max_lwork, &info);
+    // dsysv_((const char *) "U", &num_P, &nrhs, APP, &num_P, ipiv, APy, &num_P, work, &max_lwork, &info);
 
-      //      printf("about to call dgels_()\n");
+      dgetrf_(&num_P, &num_P, APP, &num_P, ipiv, &info);
+      dgetrs_((char *) "N", &num_P, &nrhs, APP, &num_P, ipiv, APy, &num_P, &info);
+#else
       dgels_((const char *) "N", &num_P, &num_P, &nrhs, APP, &num_P, APy, &num_P, work, &max_lwork, &info);
-      //      printf("  -- finished.\n");
+#endif
       
       for(int i=0; i<num_P; ++i) sP[i] = APy[i];
     
@@ -497,11 +483,10 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       
       min_sP = sP[0];
       for(int j=1; j<num_P; ++j) if(sP[j] < min_sP) min_sP = sP[j];
-
-#ifdef _DEBUG
-      printf(" -- Finished while() loop w/ min_sP= %f\n",min_sP);
-#endif
     } // while(min_sP)
+    
+    double t4_ = omp_get_wtime();
+    timer[5] += t4_ - t3_;
     
     //     x = s;  // Update the solution vector x with the non-negative least squares solution
 
@@ -535,63 +520,25 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     //         ++idx;
     //     }
 
-    //    for(int i=0; i<num_R; ++i) wr[ R[i] ] = w[i];
     for(int i=0; i<num_R; ++i) wr[i] = w[R[i]];
     
     wr_max = w[ R[0] ];
     for(int i=1; i<num_R; ++i) if(wr_max < w[ R[i] ]) wr_max = w[ R[i] ];
-
-#ifdef _DEBUG
-    {	
-      printf(" -- A(%i)= ", num_rows*num_cols);
-      //for(int i=0; i<num_rows*num_cols; ++i) printf(" %f", A[i]);
-      printf("\n");
-    }
     
-    {	
-      printf(" -- Ax(%i)= ", num_rows);
-      //for(int i=0; i<num_rows; ++i) printf(" %f", Ax[i]);
-      printf("\n");
-    }
+    double t5_ = omp_get_wtime();
+    timer[6] += t5_ - t4_;
     
-    {	
-      printf(" -- y(%i)= ", m);
-      //for(int i=0; i<m; ++i) printf(" %f", y[i]);
-      printf("\n");
-    }
-    
-    {	
-      printf(" -- x(%i)= ", num_cols);
-      for(int i=0; i<num_cols; ++i) printf(" %f", x[i]);
-      printf("\n");
-    }
-    
-    {	
-      printf(" -- w(%i)= ", num_cols);
-      for(int i=0; i<num_cols; ++i) printf(" %f", w[i]);
-      printf("\n");
-    }
-
-    {	
-      printf(" -- R.size= %i  wr(%i)= ", num_R, num_R);
-      for(int i=0; i<num_R; ++i) printf(" %f", wr[i]);
-      printf("\n");
-    }
-    
-    printf("Finished R while-loop w/ wr.maxCoeff= ");
-    if(num_R > 0) printf("%f\n",wr_max);
-    else printf("\n");
-
     if(wwhile_count > 200) {
-      printf("NNLS :: WARNING!!! wwhile_cout > %i and breaking loop\n",wwhile_count);
+      printf("NNLS :: WARNING!!! wwhile_count > %i and breaking loop\n",wwhile_count);
       break;
     }
-#endif
   } // while(numR && max_wr)
 
-  printf("NNLS::solve -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
+  timer[3] += omp_get_wtime() - t1_;
   
-  //  free(work);
+  printf("NNLS::solve(cpp) -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
+  
+  timer[0] += omp_get_wtime() - t0_;
 }
 
 int main() {
