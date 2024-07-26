@@ -7,6 +7,9 @@ PYTHON_LIB="-L/opt/local/Library/Frameworks/Python.framework/Versions/3.12/lib/ 
 
 echo "PYTHON_INC= ${PYTHON_INC}"
 
+#LAPACK=" -L/Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas "
+LAPACK=" -L/Users/cjknight/Documents/soft/lib/openblas/lib -lopenblas "
+
 COMMAND="g++-mp-13 \
 -O3 \
 -g \
@@ -19,7 +22,7 @@ COMMAND="g++-mp-13 \
 -o solver.so \
 pyeigen1.cpp \
 from_chatgpt2.cpp  \
--L /Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas  -lpthread -lm -ldl ${PYTHON_LIB} "
+${LAPACK} -lpthread -lm -ldl ${PYTHON_LIB} "
 
 echo "COMMAND= ${COMMAND}"
 ${COMMAND}

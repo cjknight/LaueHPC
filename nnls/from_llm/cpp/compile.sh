@@ -4,8 +4,11 @@
 
 PYTHON_INC=`python -m pybind11 --includes`
 
-COMMAND="g++-mp-13 -O3 -g -std=c++11 ${PYTHON_INC} solver.cpp -L /Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas  -lpthread -lm -ldl -lgfortran "
-#COMMAND="g++-mp-13 -O3 -g -std=c++11 ${PYTHON_INC} -shared -fPIC -o solver.so solver.cpp -L /Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas  -lpthread -lm -ldl -lgfortran "
+#LAPACK=" -L/Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas "
+LAPACK=" -L/Users/cjknight/Documents/soft/lib/openblas/lib -lopenblas "
+
+COMMAND="g++-mp-13 -O3 -g -std=c++11 ${PYTHON_INC} solver.cpp ${LAPACK} -lpthread -lm -ldl -lgfortran "
+#COMMAND="g++-mp-13 -O3 -g -std=c++11 ${PYTHON_INC} -shared -fPIC -o solver.so solver.cpp ${LAPACK} -lpthread -lm -ldl -lgfortran "
 
 echo "COMMAND= ${COMMAND}"
 ${COMMAND}

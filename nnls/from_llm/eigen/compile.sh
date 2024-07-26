@@ -2,6 +2,8 @@
 
 # compile as stand-alone app
 
+#LAPACK=" -L/Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas "
+LAPACK=" -L/Users/cjknight/Documents/soft/lib/openblas/lib -lopenblas "
 
 COMMAND="g++-mp-13 \
 -O3 \
@@ -11,7 +13,7 @@ COMMAND="g++-mp-13 \
 -I /Users/cjknight/Documents/soft/lib/eigen/unsupported/include \
 -std=c++14 \
 from_chatgpt2.cpp  \
--L /Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas  -lpthread -lm -ldl "
+${LAPACK} -lpthread -lm -ldl "
 
 echo "COMMAND= ${COMMAND}"
 ${COMMAND}
@@ -34,7 +36,7 @@ COMMAND="g++-mp-12 \
 -o solver.so \
 pyeigen1.cpp \
 from_chatgpt2.cpp  \
--L /Users/cjknight/Documents/soft/lib/lapack/lib -llapack -lrefblas  -lpthread -lm -ldl "
+${LAPACK} -lpthread -lm -ldl "
 
 echo "COMMAND= ${COMMAND}"
 ${COMMAND}
