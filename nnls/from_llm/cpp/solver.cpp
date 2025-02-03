@@ -287,43 +287,66 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
     // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P) = num_P x num_P
 
-      {
-	const double alpha = 1.0;
-	const double beta = 0.0;
-	dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP, &num_P, AP, &num_P, &beta, APP, &num_P);
-      }
-
+    {
+      const double alpha = 1.0;
+      const double beta = 0.0;
+      dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP, &num_P, AP, &num_P, &beta, APP, &num_P);
+    }
+    
 #if 0
-    if(num_P < 3) {
-
+    if(num_P < 4) {
       printf("num_rows= %i  num_P= %i\n",num_rows,num_P);
-      printf("APP(dgemm)= ");
-      for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
-      printf("\n");
-      for(int i=0; i<num_P*num_P; ++i) APP[i] = -1.0;
+      // printf("AP= \n");
+      // for(int i=0; i<num_rows; ++i) {
+      // 	for(int j=0; j<num_P; ++j) printf(" %f",AP[i*num_P+j]);
+      // 	printf("\n");
+      // }
       
-      {
+      printf("APP(dgemm)= \n");
+      for(int i=0; i<num_P; ++i) {
+	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
+	printf("\n");
+      }
+      for(int i=0; i<num_P*num_P; ++i) APP[i] = -1.0;
+
+#if 1
+      for(int i=0; i<num_P; ++i) {
+	for(int j=0; j<=i; ++j) {
+	  double val = 0.0;
+	  for(int k=0; k<num_rows; ++k) val += AP[k*num_P+i] * AP[k*num_P+j];
+	  APP[i*num_P+j] = val;
+	  APP[j*num_P+i] = val;
+	}
+      }
+#else
+      {    
 	const double alpha = 1.0;
 	const double beta = 0.0;
-	dsyrk_((const char *) "L", (const char *) "T", &num_P, &num_rows, &alpha, AP, &num_rows, &beta, APP, &num_P);
+	dsyrk_((const char *) "U", (const char *) "T", &num_P, &num_rows, &alpha, AP, &num_rows, &beta, APP, &num_P);
       }
+#endif
       
       // fill upper APP
       
-      printf("APP(dsyrk)= ");
-      for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
-      printf("\n");
+      printf("APP(dsyrk)= \n");
+      for(int i=0; i<num_P; ++i) {
+	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
+	printf("\n");
+      }
       
       for(int i=0; i<num_P-1; ++i)
 	for(int j=i+1; j<num_P; ++j) APP[i*num_P+j] = APP[j*num_P+i];
       
-      printf("APP(fill)= ");
-      for(int i=0; i<num_P*num_P; ++i) printf(" %f",APP[i]);
-      printf("\n");
-
-      if(num_P == 3) exit(1);
+      printf("APP(fill)= \n");
+      for(int i=0; i<num_P; ++i) {
+	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
+	printf("\n");
+      }
+      
+      //if(num_P == 4) exit(1);
     }
 #endif
+    
     double t9_ = omp_get_wtime();
     timer[9] += t9_ - t8_;
     
