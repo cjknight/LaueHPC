@@ -3,5 +3,5 @@
 export PYTHONPATH=${PWD}/..:$PYTHONPATH
 echo "PYTHONPATH= ${PYTHONPATH}"
 
-python test.py
-
+#python test.py
+python test_reuse.py
