@@ -61,6 +61,8 @@ void NNLS::init(int nr, int nc)
     sP.resize(max_size_vector);
     APy.resize(max_size_vector);
     Ax.resize(max_size_vector);
+
+    x_old.resize(max_size_vector);
   }
 
   if(maxv*maxv > max_size_matrix) {
@@ -105,6 +107,8 @@ void NNLS::finalize()
   Ax.clear();
   AP.clear();
   APP.clear();
+
+  x_old.clear();
   
   printf("\nNNLS :: Timer Summary\n");
   printf(" -- i= %i  timer= %10.5f ms %s\n",0, timer[0]*1000.0, " :: NNLS non_negative_least_squares()");
@@ -168,7 +172,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     const double alpha = 1.0;
     const double beta = 0.0;
     const int inc = 1;
-    printf("dgemv_(1) :: num_cols= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_cols, num_rows, alpha, inc, beta);
+    //printf("dgemv_(1) :: num_cols= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_cols, num_rows, alpha, inc, beta);
     dgemv_((const char *) "T", &num_cols, &num_rows, &alpha, A, &num_cols, y, &inc, &beta, w.data(), &inc);
   }
   
@@ -273,7 +277,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
 #if 0
     if(num_P < 4) {
-      printf("num_rows= %i  num_P= %i\n",num_rows,num_P);
+      //printf("num_rows= %i  num_P= %i\n",num_rows,num_P);
       // printf("AP= \n");
       // for(int i=0; i<num_rows; ++i) {
       // 	for(int j=0; j<num_P; ++j) printf(" %f",AP[i*num_P+j]);
@@ -459,7 +463,7 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 	const double alpha = 1.0;
 	const double beta = 0.0;
 	const int inc = 1;
-	printf("dgemv_(2) :: num_P= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_P, num_rows, alpha, inc, beta);
+	//printf("dgemv_(2) :: num_P= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_P, num_rows, alpha, inc, beta);
 	dgemv_((const char *) "N", &num_P, &num_rows, &alpha, AP.data(), &num_P, y, &inc, &beta, APy.data(), &inc);
       }
 #if 1
@@ -540,18 +544,26 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
   timer[3] += omp_get_wtime() - t1_;
   
-  printf("NNLS::solve(cpp) -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
+  printf("NNLS::solve(cpp) -- num_R= %i  num_P= %i  w_count= %i  s_count= %i\n",num_R,num_P,wwhile_count,swhile_count);
 
-  printf("num_R= %i  num_P= %i\n", num_R, num_P);
+  for(int i=0; i<num_cols; ++i) x_old[i] = x[i];
   
   timer[0] += omp_get_wtime() - t0_;
 }
 
 void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, int num_rows, int num_cols, double epsilon)
-{  
+{
+  if(first_call) {
+    non_negative_least_squares(A, y, x, num_rows, num_cols, epsilon);
+    first_call = false;
+    return;
+  }
+  
   //  if(!initialized)
   NNLS::init(num_rows, num_cols);
 
+  //  printf("\nInside nnls_reuse()\n");
+  
   double t0_ = omp_get_wtime();
   
   // int m = A.rows();
@@ -566,7 +578,9 @@ void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, 
   
   // VectorXd x = VectorXd::Zero(n);  // Initialize the solution vector x with zeros
 
-#if 0
+#if 1
+  for(int i=0; i<num_cols; ++i) x[i] = x_old[i];  
+#else
   for(int i=0; i<num_cols; ++i) x[i] = 0.0;
 #endif
 
@@ -575,7 +589,7 @@ void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, 
   //        R.insert(i);
   //    }
 
-  printf("(reuse) num_R= %i  num_P= %i\n",num_R,num_P);
+  //  printf("(reuse) num_R= %i  num_P= %i\n",num_R,num_P);
   
 #if 0
   num_R = n;
@@ -620,7 +634,7 @@ void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, 
     const double alpha = 1.0;
     const double beta = 0.0;
     const int inc = 1;
-    printf("dgemv_(r1) :: num_cols= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_cols, num_rows, alpha, inc, beta);
+    //    printf("dgemv_(r1) :: num_cols= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_cols, num_rows, alpha, inc, beta);
     dgemv_((const char *) "T", &num_cols, &num_rows, &alpha, A, &num_cols, y, &inc, &beta, w.data(), &inc);
   }
 #endif
@@ -865,7 +879,7 @@ void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, 
       //             }
       //         }
 
-      printf("(reuse) num_P(before)= %i\n",num_P);
+      //      printf("(reuse) num_P(before)= %i\n",num_P);
       
       int ii = 0;
       while(ii < num_P) {
@@ -881,7 +895,7 @@ void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, 
 	} else ii++;
       }
       
-      printf("(reuse) num_P(after)= %i\n",num_P);
+      //printf("(reuse) num_P(after)= %i\n",num_P);
       
       //         // Recompute the submatrix AP and the least squares solution sP
       //         //AP = A;
@@ -916,7 +930,7 @@ void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, 
 	const double alpha = 1.0;
 	const double beta = 0.0;
 	const int inc = 1;
-	printf("dgemv_(r2) :: num_P= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_P, num_rows, alpha, inc, beta);
+	//printf("dgemv_(r2) :: num_P= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_P, num_rows, alpha, inc, beta);
 	dgemv_((const char *) "N", &num_P, &num_rows, &alpha, AP.data(), &num_P, y, &inc, &beta, APy.data(), &inc);
       }
 #if 1
@@ -997,7 +1011,9 @@ void NNLS::non_negative_least_squares_reuse(double * A, double * y, double * x, 
 
   timer[3] += omp_get_wtime() - t1_;
   
-  printf("NNLS::solve(cpp) -- w_count= %i  s_count= %i\n",wwhile_count,swhile_count);
+  printf("NNLS::solve(cpp_reuse) -- num_R= %i  num_P= %i  w_count= %i  s_count= %i\n",num_R,num_P,wwhile_count,swhile_count);
+  
+  for(int i=0; i<num_cols; ++i) x_old[i] = x[i];
   
   timer[0] += omp_get_wtime() - t0_;
 }

@@ -18,7 +18,7 @@ ldiff_eigen = 0.0
 ldiff_cpp = 0.0
 ldiff_reuse = 0.0
 
-for indx in range(1):
+for indx in range(10):
     print("indx= ", indx)
 #    data_file = '../../../python/data/data-' + str(indx) + '.npy'
 #    kernel_file = '../../../python/kernel/kernel-' + str(indx) + '.npy'
@@ -46,45 +46,39 @@ for indx in range(1):
 
     #print("x(eigen)= ", x2)
 
-    x1 = np.zeros(num_cols)
+    if indx == 0:
+        x1 = np.zeros(num_cols)
+    else:
+        x1 = x1_old
 
     t0 = current_milli_time()
-    cpp_nnls.solve(A, y, x1)
-    #cpp_nnls.solve(A, y, x1, epsilon = 1e-1)
+#    cpp_nnls.solve(A, y, x1)
+    cpp_nnls.solve_reuse(A, y, x1)
     t_cpp += current_milli_time() - t0
 
     #print("x(cpp)= ", x1)
 
-    x3 = np.zeros(num_cols)
-
-    t0 = current_milli_time()
-    cpp_nnls.solve_reuse(A, y, x3)
-    t_reuse += current_milli_time() - t0
+    x1_old = x1
     
     residual0 = np.linalg.norm(A.dot(x0) - y)
     residual1 = np.linalg.norm(A.dot(x1) - y)
     residual2 = np.linalg.norm(A.dot(x2) - y)
-    residual3 = np.linalg.norm(A.dot(x3) - y)
 
-    diff1 = sum( (x1 - x0) * (x1 - x0) )
-    diff2 = sum( (x2 - x0) * (x2 - x0) )
-    diff3 = sum( (x3 - x0) * (x3 - x0))
+    diff1 = sum( (x1 - x0) * (x1 - x0) ) # comparison of c++ solver with scipy
+    diff2 = sum( (x2 - x0) * (x2 - x0) ) # comparison of eigen c++ solver with scipy
 
     if diff1 > ldiff_cpp: ldiff_cpp = diff1
     if diff2 > ldiff_eigen: ldiff_eigen = diff2
-    if diff3 > ldiff_reuse: ldiff_reuse = diff3
 
-    print("shape(A)= ", np.shape(A)," residuals (scipy, cpp, eigen)= ", residual0, residual1, residual2, residual3, "diff(cpp, eigen) = ", "{:e}".format(diff1), "{:e}".format(diff2), "{:e}".format(diff3))
+    print("shape(A)= ", np.shape(A)," residuals (scipy, cpp, eigen)= ", residual0, residual1, residual2, "diff(cpp, eigen) = ", "{:e}".format(diff1), "{:e}".format(diff2))
 
-    print("shape(x1)= ", np.shape(x1)," x1= ", x1)
-    print("shape(x2)= ", np.shape(x2)," x1= ", x2)
-    print("shape(x3)= ", np.shape(x3)," x1= ", x3)
+#    print("shape(x1)= ", np.shape(x1)," x1= ", x1)
+#    print("shape(x2)= ", np.shape(x2)," x2= ", x2)
 
 print("t_scipy= ", t_scipy, " ms")
 print("t_eigen= ", t_eigen, " ms")
 print("t_cpp=   ", t_cpp, " ms")
-print("t_reuse= ", t_reuse, " ms")
 
-print("Largest differences (cpp, eigen): ", "{:e}".format(ldiff_cpp), "{:e}".format(ldiff_eigen), "{:e}".format(ldiff_reuse))
+print("Largest differences (cpp, eigen): ", "{:e}".format(ldiff_cpp), "{:e}".format(ldiff_eigen))
 
 cpp_nnls.finalize()

@@ -16,7 +16,7 @@ t_eigen = 0.0
 ldiff_eigen = 0.0
 ldiff_cpp = 0.0
 
-for indx in range(100):
+for indx in range(10):
     print("indx= ", indx)
 #    data_file = '../../../python/data/data-' + str(indx) + '.npy'
 #    kernel_file = '../../../python/kernel/kernel-' + str(indx) + '.npy'

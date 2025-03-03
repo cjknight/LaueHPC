@@ -20,6 +20,7 @@ namespace NNLS {
   void non_negative_least_squares_reuse(double * A, double * y, double * x, int num_rows, int num_cols, double epsilon = 1e-6);
   
   bool initialized = false;
+  bool first_call = true;
 
   int max_size_vector = 0;
   int max_size_matrix = 0;
@@ -43,6 +44,8 @@ namespace NNLS {
   std::vector<double> AP;
   std::vector<double> APP;
 
+  std::vector<double> x_old;
+  
   double timer[14];
 
 #if defined (_USE_PYBIND)
