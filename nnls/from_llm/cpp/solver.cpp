@@ -6,6 +6,8 @@
 
 #include "solver.h"
 
+//#define _USE_DSYRK
+
 extern "C" {
   void dgels_(const char * trans, const int * m, const int * n, const int * nrhs,
 	      double * A, const int * lda, double * B, const int * ldb, double * work,                     
@@ -259,7 +261,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
     for(int i=0; i<num_P; ++i) {
       int indx = P[i];
+#if defined(_USE_DSYRK)
+      for(int j=0; j<num_rows; ++j) AP[i*num_rows+j] = A[j*num_cols+indx];
+#else
       for(int j=0; j<num_rows; ++j) AP[j*num_P+i] = A[j*num_cols+indx];
+#endif
     }
 
     double t8_ = omp_get_wtime();
@@ -269,64 +275,106 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
     
     // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P) = num_P x num_P
 
+#if !defined(_USE_DSYRK)
     {
       const double alpha = 1.0;
       const double beta = 0.0;
       dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP.data(), &num_P, AP.data(), &num_P, &beta, APP.data(), &num_P);
     }
-    
-#if 0
-    if(num_P < 4) {
-      //printf("num_rows= %i  num_P= %i\n",num_rows,num_P);
-      // printf("AP= \n");
-      // for(int i=0; i<num_rows; ++i) {
-      // 	for(int j=0; j<num_P; ++j) printf(" %f",AP[i*num_P+j]);
-      // 	printf("\n");
+#else
+    {
+      const double alpha = 1.0;
+      const double beta = 0.0;
+      //      std::vector<double> APt(AP.size());
+      //      for(int i=0; i<APP.size(); ++i) APP[i] = 0.0;
+      // for(int i=0; i<num_P; ++i)
+      // 	for(int j=0; j<num_rows; ++j)
+      // 	  APt[i*num_rows+j] = AP[j*num_P+i];
+      
+      // printf("APt= \n");
+      // for(int i=0; i<num_P; ++i) {
+      //   for(int j=0; j<num_rows; ++j) printf(" %f",APt[i*num_rows+j]);
+      //   printf("\n");
       // }
       
-      printf("APP(dgemm)= \n");
-      for(int i=0; i<num_P; ++i) {
-	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
-	printf("\n");
-      }
-      for(int i=0; i<num_P*num_P; ++i) APP[i] = -1.0;
-
-#if 1
-      for(int i=0; i<num_P; ++i) {
-	for(int j=0; j<=i; ++j) {
-	  double val = 0.0;
-	  for(int k=0; k<num_rows; ++k) val += AP[k*num_P+i] * AP[k*num_P+j];
-	  APP[i*num_P+j] = val;
-	  APP[j*num_P+i] = val;
-	}
-      }
-#else
-      {    
-	const double alpha = 1.0;
-	const double beta = 0.0;
-	dsyrk_((const char *) "U", (const char *) "T", &num_P, &num_rows, &alpha, AP.data(), &num_rows, &beta, APP.data(), &num_P);
-      }
+      dsyrk_((const char *) "U", (const char *) "T", &num_P, &num_rows, &alpha, AP.data(), &num_rows, &beta, APP.data(), &num_P);
+      
+      for(int i=0; i<num_P-1; ++i)
+       	for(int j=i+1; j<num_P; ++j) APP[i*num_P+j] = APP[j*num_P+i];
+    }
 #endif
+    
+#if 0
+    // if(num_P < 5) {
+    //printf("num_rows= %i  num_P= %i\n",num_rows,num_P);
+       // printf("AP= \n");
+       // for(int i=0; i<num_rows; ++i) {
+       //  	for(int j=0; j<num_P; ++j) printf(" %f",AP[i*num_P+j]);
+       //  	printf("\n");
+       // }
+    
+       // printf("APP(dgemm)= \n");
+       // for(int i=0; i<num_P; ++i) {
+       // 	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
+       // 	printf("\n");
+       // }
+       // for(int i=0; i<num_P*num_P; ++i) APP[i] = -1.0;
+
+       // //#if 1
+       // for(int i=0; i<num_P; ++i) {
+       // 	for(int j=0; j<=i; ++j) {
+       // 	  double val = 0.0;
+       // 	  for(int k=0; k<num_rows; ++k) val += AP[k*num_P+i] * AP[k*num_P+j];
+       // 	  APP[i*num_P+j] = val;
+       // 	  APP[j*num_P+i] = val;
+       // 	}
+       // }
+
+       // printf("APP(by-hand)= \n");
+       // for(int i=0; i<num_P; ++i) {
+       // 	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
+       // 	printf("\n");
+       // }
+       //#else
+      {    
+      	const double alpha = 1.0;
+      	const double beta = 0.0;
+      	std::vector<double> APt(AP.size());
+      	for(int i=0; i<APP.size(); ++i) APP[i] = 0.0;
+      	for(int i=0; i<num_P; ++i)
+      	  for(int j=0; j<num_rows; ++j)
+      	    APt[i*num_rows+j] = AP[j*num_P+i];
+
+      	// printf("APt= \n");
+      	// for(int i=0; i<num_P; ++i) {
+      	//   for(int j=0; j<num_rows; ++j) printf(" %f",APt[i*num_rows+j]);
+      	//   printf("\n");
+      	// }
+      
+      	dsyrk_((const char *) "U", (const char *) "T", &num_P, &num_rows, &alpha, AP.data(), &num_rows, &beta, APP.data(), &num_P);
+      }
+      //#endif
       
       // fill upper APP
       
-      printf("APP(dsyrk)= \n");
-      for(int i=0; i<num_P; ++i) {
-	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
-	printf("\n");
-      }
+       // printf("APP(dsyrk)= \n");
+       // for(int i=0; i<num_P; ++i) {
+       // 	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
+       // 	printf("\n");
+       // }
       
-      for(int i=0; i<num_P-1; ++i)
-	for(int j=i+1; j<num_P; ++j) APP[i*num_P+j] = APP[j*num_P+i];
+       for(int i=0; i<num_P-1; ++i)
+       	for(int j=i+1; j<num_P; ++j) APP[i*num_P+j] = APP[j*num_P+i];
       
-      printf("APP(fill)= \n");
-      for(int i=0; i<num_P; ++i) {
-	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
-	printf("\n");
-      }
+       // printf("APP(syrk-fill)= \n");
+       // for(int i=0; i<num_P; ++i) {
+       // 	for(int j=0; j<num_P; ++j) printf(" %f",APP[i*num_P+j]);
+       // 	printf("\n");
+       // }
+
       
-      //if(num_P == 4) exit(1);
-    }
+       //if(num_P == 4) exit(1);
+      //    }
 #endif
     
     double t9_ = omp_get_wtime();
@@ -336,7 +384,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
     for(int i=0; i<num_P; ++i) {
       double val = 0.0;
+#if defined(_USE_DSYRK)
+      for(int j=0; j<num_rows; ++j) val += AP[i*num_rows+j] * y[j];
+#else
       for(int j=0; j<num_rows; ++j) val += AP[j*num_P+i] * y[j];
+#endif
       APy[i] = val;
     }
 
@@ -439,7 +491,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 
       for(int i=0; i<num_P; ++i) {
 	int indx = P[i];
+#if defined(_USE_DSYRK)
+ 	for(int j=0; j<num_rows; ++j) AP[i*num_rows+j] = A[j*num_cols+indx];
+#else
 	for(int j=0; j<num_rows; ++j) AP[j*num_P+i] = A[j*num_cols+indx];
+#endif
       }
       
       //         //s = VectorXd::Zero(n);
@@ -450,13 +506,35 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
       //         sP = (AP.transpose() * AP).ldlt().solve(AP.transpose() * y);
       
       // APP = AP.transpose() * AP // (num_P x num_rows) * (num_rows x num_P)
-
+      
+#if !defined(_USE_DSYRK)
       {
 	const double alpha = 1.0;
 	const double beta = 0.0;
 	dgemm_((const char *) "N", (const char *) "T", &num_P, &num_P, &num_rows, &alpha, AP.data(), &num_P, AP.data(), &num_P, &beta, APP.data(), &num_P);
       }
+#else
+      {    
+      	const double alpha = 1.0;
+      	const double beta = 0.0;
+      	// std::vector<double> APt(AP.size());
+      	//  for(int i=0; i<APP.size(); ++i) APP[i] = 0.0;
+      	//  for(int i=0; i<num_P; ++i)
+      	//    for(int j=0; j<num_rows; ++j)
+      	//      APt[i*num_rows+j] = AP[j*num_P+i];
+
+      	// printf("APt= \n");
+      	// for(int i=0; i<num_P; ++i) {
+      	//   for(int j=0; j<num_rows; ++j) printf(" %f",APt[i*num_rows+j]);
+      	//   printf("\n");
+      	// }
       
+      	dsyrk_((const char *) "U", (const char *) "T", &num_P, &num_rows, &alpha, AP.data(), &num_rows, &beta, APP.data(), &num_P);
+	
+	for(int i=0; i<num_P-1; ++i)
+	  for(int j=i+1; j<num_P; ++j) APP[i*num_P+j] = APP[j*num_P+i];
+      }
+#endif
       // APy = AP.tranpose() * y
 
       {
@@ -464,7 +542,11 @@ void NNLS::non_negative_least_squares(double * A, double * y, double * x, int nu
 	const double beta = 0.0;
 	const int inc = 1;
 	//printf("dgemv_(2) :: num_P= %i  num_rows= %i  alpha= %f  inc= %i, beta= %f\n",num_P, num_rows, alpha, inc, beta);
+#if defined(_USE_DSYRK)
+ 	dgemv_((const char *) "T", &num_rows, &num_P, &alpha, AP.data(), &num_rows, y, &inc, &beta, APy.data(), &inc);
+#else
 	dgemv_((const char *) "N", &num_P, &num_rows, &alpha, AP.data(), &num_P, y, &inc, &beta, APy.data(), &inc);
+#endif
       }
 #if 1
     // dsytrf_((const char *) "U", &num_P, APP, &num_P, ipiv, work, &max_lwork, &info);
